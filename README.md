@@ -100,7 +100,6 @@ Gerencia o carregamento de arquivos PDB.
    - **Clicar em átomo**: Ver informações do elemento
    - **Botão direito + arrastar**: Panorâmica
 
-📖 Veja [CENTERING.md](CENTERING.md) para detalhes sobre centralização automática
 
 ## 🔧 Correções Implementadas
 
@@ -142,7 +141,6 @@ O visualizador suporta arquivos PDB com:
 - **Raios Covalentes**: Usa raios covalentes dos elementos para determinar ligações válidas
 - **Tolerância**: 15% de margem para ligações ligeiramente esticadas
 
-📖 Veja [BONDS.md](BONDS.md) para mais detalhes sobre o sistema de ligações
 
 ## 🛠️ Tecnologias Utilizadas
 
