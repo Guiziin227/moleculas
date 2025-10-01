@@ -1,19 +1,174 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visualizador de Moléculas PDB</title>
 
-    <link rel="stylesheet" href="styles.css">
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <title>Ligações Químicas</title>
-</head>
-<body>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+      }
+      #container {
+        width: 100vw;
+        height: 100vh;
+      }
+      #fileSelector {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        z-index: 1000;
+        max-width: 300px;
+      }
+      #fileInput {
+        margin: 10px 0;
+        padding: 5px;
+        border-radius: 5px;
+        border: none;
+      }
+      .button {
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        width: 100%;
+        margin-top: 5px;
+        font-size: 14px;
+      }
+      #loadButton {
+        background: #4caf50;
+      }
+      #loadButton:hover {
+        background: #45a049;
+      }
+      #loadProjectButton {
+        background: #2196f3;
+      }
+      #loadProjectButton:hover {
+        background: #1976d2;
+      }
+      #clearButton {
+        background: #f44336;
+        padding: 5px 10px;
+        font-size: 12px;
+        width: auto;
+        margin-top: 10px;
+      }
+      #clearButton:hover {
+        background: #e53935;
+      }
+      #moleName {
+        font-weight: bold;
+        color: #4caf50;
+        margin-top: 10px;
+      }
+      .section {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #444;
+        border-radius: 5px;
+      }
+      .divider {
+        text-align: center;
+        margin: 15px 0;
+        color: #888;
+      }
+      select {
+        width: 100%;
+        margin: 5px 0;
+        padding: 5px;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container"></div>
 
-</body>
+    <div id="fileSelector">
+      <div><strong>Seletor de Moléculas PDB</strong></div>
 
-<script src="index.js"></script>
+      <!-- Opção 1: Moléculas do projeto -->
+      <div class="section">
+        <strong>Moléculas do Projeto:</strong><br />
+        <select id="projectMolecules">
+          <option value="">Selecione uma molécula...</option>
+          <option value="./pdb/butanol.pdb">Butanol</option>
+        </select>
+        <button id="loadProjectButton" class="button">
+          Carregar Selecionada
+        </button>
+      </div>
 
+      <!-- Divisor -->
+      <div class="divider">OU</div>
+
+      <!-- Opção 2: Arquivo do computador -->
+      <div class="section">
+        <strong>Carregar do Computador:</strong><br />
+        <input
+          type="file"
+          id="fileInput"
+          accept=".pdb"
+          style="
+            width: 100%;
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+            border: none;
+          "
+        />
+        <button id="loadButton" class="button">Carregar Arquivo</button>
+      </div>
+
+      <button id="clearButton" class="button">Limpar Cena</button>
+      <div id="moleName">Nenhuma molécula carregada</div>
+    </div>
+
+    <!-- Módulos JavaScript -->
+    <script src="./js/pdbParser.js"></script>
+    <script src="./js/moleculeRenderer.js"></script>
+    <script src="./js/sceneManager.js"></script>
+    <script src="./js/fileLoader.js"></script>
+
+    <!-- Script principal -->
+    <script>
+      // Inicializar a cena
+      initScene();
+
+      // Configurar o carregamento de arquivos
+      setupFileSelector((pdbData, fileName) => {
+        // Limpar cena anterior
+        clearScene();
+
+        // Fazer parsing do PDB
+        const { atoms, connections } = parsePDB(pdbData);
+
+        // Criar e renderizar a molécula
+        const scene = getScene();
+        createMolecule(atoms, connections, scene);
+
+        // Ajustar câmera para enquadrar a molécula perfeitamente
+        adjustCameraToMolecule(atoms);
+
+        // Atualizar nome da molécula
+        document.getElementById("moleName").innerText = `Molécula: ${fileName}`;
+      });
+
+      // Configurar botão de limpar
+      document.getElementById("clearButton").addEventListener("click", () => {
+        clearScene();
+      });
+    </script>
+  </body>
 </html>
