@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visualizador AR de Moléculas - MindAR</title>
+
+    <!-- MindAR + Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+      }
+
+      #container {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+      }
+
+      #fileSelector {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        z-index: 1000;
+        max-width: 300px;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      #arStatus {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px 15px;
+        border-radius: 8px;
+        z-index: 1000;
+        font-size: 14px;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+
+      .status-waiting {
+        background-color: #ffa500;
+        animation: pulse 1.5s infinite;
+      }
+
+      .status-found {
+        background-color: #4caf50;
+      }
+
+      .status-lost {
+        background-color: #f44336;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+
+      .button {
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        width: 100%;
+        margin-top: 5px;
+        font-size: 14px;
+      }
+
+      #loadButton {
+        background: #4caf50;
+      }
+
+      #loadButton:hover {
+        background: #45a049;
+      }
+
+      #loadProjectButton {
+        background: #2196f3;
+      }
+
+      #loadProjectButton:hover {
+        background: #1976d2;
+      }
+
+      #startARButton {
+        background: #ff9800;
+        font-weight: bold;
+        padding: 12px;
+        font-size: 16px;
+      }
+
+      #startARButton:hover {
+        background: #f57c00;
+      }
+
+      #stopARButton {
+        background: #f44336;
+        display: none;
+      }
+
+      #stopARButton:hover {
+        background: #e53935;
+      }
+
+      #moleName {
+        font-weight: bold;
+        color: #4caf50;
+        margin-top: 10px;
+      }
+
+      .section {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #444;
+        border-radius: 5px;
+      }
+
+      .divider {
+        text-align: center;
+        margin: 15px 0;
+        color: #888;
+      }
+
+      select {
+        width: 100%;
+        margin: 5px 0;
+        padding: 5px;
+        border-radius: 3px;
+      }
+
+      #instructions {
+        background: rgba(255, 152, 0, 0.9);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      #instructions strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      #toggleUI {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 1001;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container"></div>
+
+    <!-- Status AR -->
+    <div id="arStatus">
+      <span class="status-indicator status-waiting"></span>
+      <span id="statusText">AR não iniciado</span>
+    </div>
+
+    <!-- Botão para mostrar/ocultar UI -->
+    <button id="toggleUI" title="Mostrar/Ocultar Menu">⚙️</button>
+
+    <!-- Seletor de moléculas -->
+    <div id="fileSelector">
+      <div><strong>🧬 Visualizador AR de Moléculas</strong></div>
+
+      <div id="instructions">
+        <strong>📱 Como usar:</strong>
+        1. Selecione uma molécula abaixo<br>
+        2. Clique em "Iniciar AR"<br>
+        3. Permita acesso à câmera<br>
+        4. Aponte para uma superfície plana<br>
+        5. A molécula aparecerá em AR!
+      </div>
+
+      <!-- Controles AR -->
+      <div class="section">
+        <button id="startARButton" class="button">
+          🚀 Iniciar AR
+        </button>
+        <button id="stopARButton" class="button">
+          🛑 Parar AR
+        </button>
+      </div>
+
+      <!-- Opção 1: Moléculas do projeto -->
+      <div class="section">
+        <strong>Moléculas do Projeto:</strong><br />
+        <select id="projectMolecules">
+          <option value="">Selecione uma molécula...</option>
+          <option value="./pdb/butanol.pdb">Butanol</option>
+          <option value="./pdb/atp.pdb">ATP</option>
+          <option value="./pdb/diamond.pdb">Diamante</option>
+          <option value="./pdb/nacl.pdb">NaCl</option>
+          <option value="./pdb/heroin.pdb">Heroína</option>
+          <option value="./pdb/methanol.pdb">Metanol</option>
+          <option value="./pdb/ethanol.pdb">Etanol</option>
+          <option value="./pdb/propanol.pdb">Propanol</option>
+        </select>
+        <button id="loadProjectButton" class="button">
+          Carregar Selecionada
+        </button>
+      </div>
+
+      <!-- Divisor -->
+      <div class="divider">OU</div>
+
+      <!-- Opção 2: Arquivo do computador -->
+      <div class="section">
+        <strong>Carregar do Computador:</strong><br />
+        <input
+          type="file"
+          id="fileInput"
+          accept=".pdb"
+          style="
+            width: 100%;
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+            border: none;
+          "
+        />
+        <button id="loadButton" class="button">Carregar Arquivo</button>
+      </div>
+
+      <div id="moleName">Nenhuma molécula carregada</div>
+    </div>
+
+    <!-- Módulos JavaScript -->
+    <script src="./js/pdbParser.js"></script>
+    <script src="./js/moleculeRenderer.js"></script>
+    <script src="./js/arSceneManager.js"></script>
+    <script src="./js/fileLoader.js"></script>
+
+    <!-- Script principal AR -->
+    <script>
+      let currentMoleculeData = null;
+      let currentMoleculeName = null;
+
+      // Toggle UI visibility
+      document.getElementById("toggleUI").addEventListener("click", () => {
+        const selector = document.getElementById("fileSelector");
+        selector.style.display = selector.style.display === "none" ? "block" : "none";
+      });
+
+      // Configurar o carregamento de arquivos
+      setupFileSelector((pdbData, fileName) => {
+        // Armazenar dados da molécula
+        currentMoleculeData = pdbData;
+        currentMoleculeName = fileName;
+
+        // Atualizar nome da molécula
+        document.getElementById("moleName").innerText = `Molécula: ${fileName}`;
+
+        console.log("✅ Molécula carregada e pronta para AR:", fileName);
+        alert(`Molécula "${fileName}" carregada! Agora clique em "Iniciar AR" para visualizar em realidade aumentada.`);
+      });
+
+      // Iniciar AR
+      document.getElementById("startARButton").addEventListener("click", async () => {
+        if (!currentMoleculeData) {
+          alert("Por favor, carregue uma molécula primeiro!");
+          return;
+        }
+
+        try {
+          await initARScene(currentMoleculeData, currentMoleculeName);
+
+          // Atualizar UI
+          document.getElementById("startARButton").style.display = "none";
+          document.getElementById("stopARButton").style.display = "block";
+        } catch (error) {
+          console.error("Erro ao iniciar AR:", error);
+          alert("Erro ao iniciar AR. Verifique se você permitiu acesso à câmera.");
+        }
+      });
+
+      // Parar AR
+      document.getElementById("stopARButton").addEventListener("click", () => {
+        stopARScene();
+
+        // Atualizar UI
+        document.getElementById("startARButton").style.display = "block";
+        document.getElementById("stopARButton").style.display = "none";
+      });
+    </script>
+  </body>
+</html>
+
