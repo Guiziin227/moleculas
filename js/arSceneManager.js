@@ -1,12 +1,15 @@
 /**
  * arSceneManager.js
- * Módulo responsável por gerenciar a cena AR usando MindAR + Three.js
+ * Módulo responsável por gerenciar a cena AR usando WebXR + Three.js
  */
 
-let mindarThree;
 let arScene, arCamera, arRenderer;
-let moleculeAnchor;
+let moleculeGroup;
 let isARRunning = false;
+let xrSession = null;
+let xrRefSpace = null;
+let hitTestSource = null;
+let isPlaced = false;
 
 /**
  * Inicializa a cena AR e carrega a molécula
@@ -22,23 +25,33 @@ async function initARScene(pdbData, moleculeName) {
   try {
     updateARStatus("Iniciando AR...", "waiting");
 
-    // Criar instância do MindAR
-    // Nota: MindAR Image requer um arquivo .mind com targets de imagem
-    // Para simplificar, vamos usar o modo sem marcadores (image-tracking)
-    mindarThree = new window.MINDAR.IMAGE.MindARThree({
-      container: document.getElementById("container"),
-      imageTargetSrc: "./targets.mind", // Você precisará criar este arquivo
-      maxTrack: 1, // Número máximo de marcadores a rastrear simultaneamente
-      filterMinCF: 0.0001,
-      filterBeta: 0.001,
-      warmupTolerance: 5,
-      missTolerance: 5,
-    });
+    // Verificar suporte a WebXR
+    if (!navigator.xr) {
+      throw new Error("WebXR não é suportado neste navegador. Use Chrome ou Edge em um dispositivo Android/iOS.");
+    }
 
-    const { renderer, scene, camera } = mindarThree;
-    arRenderer = renderer;
-    arScene = scene;
-    arCamera = camera;
+    const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+    if (!isSupported) {
+      throw new Error("AR não é suportado neste dispositivo. Certifique-se de estar usando um dispositivo móvel compatível.");
+    }
+
+    // Criar cena Three.js
+    arScene = new THREE.Scene();
+
+    // Criar câmera
+    arCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+    // Criar renderer
+    arRenderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true 
+    });
+    arRenderer.setPixelRatio(window.devicePixelRatio);
+    arRenderer.setSize(window.innerWidth, window.innerHeight);
+    arRenderer.xr.enabled = true;
+    
+    const container = document.getElementById("container");
+    container.appendChild(arRenderer.domElement);
 
     // Configurar iluminação
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -48,14 +61,11 @@ async function initARScene(pdbData, moleculeName) {
     directionalLight.position.set(1, 1, 1);
     arScene.add(directionalLight);
 
-    // Criar âncora para a molécula (vinculada ao marcador 0)
-    moleculeAnchor = mindarThree.addAnchor(0);
-
     // Parse do PDB e criação da molécula
     const { atoms, connections } = parsePDB(pdbData);
 
     // Criar grupo para a molécula
-    const moleculeGroup = new THREE.Group();
+    moleculeGroup = new THREE.Group();
 
     // Renderizar molécula no grupo
     createMoleculeInGroup(atoms, connections, moleculeGroup);
@@ -66,7 +76,7 @@ async function initARScene(pdbData, moleculeName) {
     const maxDim = Math.max(size.x, size.y, size.z);
 
     // Escalar molécula para caber bem no AR (ajuste conforme necessário)
-    const targetSize = 0.5; // Tamanho em metros no mundo AR
+    const targetSize = 0.15; // Tamanho em metros no mundo AR
     const scale = targetSize / maxDim;
     moleculeGroup.scale.set(scale, scale, scale);
 
@@ -74,42 +84,81 @@ async function initARScene(pdbData, moleculeName) {
     const center = boundingBox.getCenter(new THREE.Vector3());
     moleculeGroup.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
 
-    // Adicionar rotação automática suave
-    moleculeGroup.userData.rotationSpeed = 0.3;
+    // Molécula invisível até ser posicionada
+    moleculeGroup.visible = false;
+    arScene.add(moleculeGroup);
 
-    // Adicionar molécula à âncora
-    moleculeAnchor.group.add(moleculeGroup);
+    // Iniciar sessão AR
+    xrSession = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: document.getElementById('fileSelector') }
+    });
 
-    // Eventos de rastreamento
-    moleculeAnchor.onTargetFound = () => {
-      console.log("🎯 Marcador detectado!");
-      updateARStatus("Marcador detectado!", "found");
-    };
+    await xrSession.updateRenderState({
+      baseLayer: new XRWebGLLayer(xrSession, arRenderer.getContext())
+    });
 
-    moleculeAnchor.onTargetLost = () => {
-      console.log("❌ Marcador perdido");
-      updateARStatus("Procurando marcador...", "lost");
-    };
+    xrRefSpace = await xrSession.requestReferenceSpace('local');
+    const viewerSpace = await xrSession.requestReferenceSpace('viewer');
+    hitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
 
-    // Iniciar AR
-    await mindarThree.start();
     isARRunning = true;
-
-    updateARStatus("AR Ativo - Procurando marcador...", "waiting");
+    isPlaced = false;
+    updateARStatus("Toque na tela para posicionar a molécula", "waiting");
     console.log("✅ AR iniciado com sucesso!");
 
-    // Loop de animação
-    arRenderer.setAnimationLoop(() => {
-      if (moleculeGroup && moleculeAnchor.group.visible) {
-        // Rotação suave da molécula
-        moleculeGroup.rotation.y += 0.01 * moleculeGroup.userData.rotationSpeed;
+    // Handler de toque para posicionar molécula
+    xrSession.addEventListener('select', (event) => {
+      if (!isPlaced && hitTestSource) {
+        const frame = event.frame;
+        const hitTestResults = frame.getHitTestResults(hitTestSource);
+        
+        if (hitTestResults.length > 0) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(xrRefSpace);
+          
+          if (pose) {
+            moleculeGroup.position.set(
+              pose.transform.position.x,
+              pose.transform.position.y,
+              pose.transform.position.z
+            );
+            moleculeGroup.visible = true;
+            isPlaced = true;
+            updateARStatus("Molécula posicionada! Use pinça para redimensionar", "found");
+            console.log("✅ Molécula posicionada!");
+          }
+        }
       }
-      arRenderer.render(arScene, arCamera);
+    });
+
+    // Handler de fim de sessão
+    xrSession.addEventListener('end', () => {
+      stopARScene();
+    });
+
+    // Loop de animação
+    arRenderer.setAnimationLoop((timestamp, frame) => {
+      if (frame && xrSession) {
+        // Rotação suave da molécula
+        if (moleculeGroup.visible) {
+          moleculeGroup.rotation.y += 0.01;
+        }
+        
+        arRenderer.render(arScene, arCamera);
+      }
     });
 
   } catch (error) {
     console.error("❌ Erro ao inicializar AR:", error);
-    updateARStatus("Erro ao iniciar AR", "lost");
+    updateARStatus("Erro: " + error.message, "lost");
+    
+    // Mensagem mais amigável
+    if (error.message.includes("WebXR")) {
+      alert("⚠️ AR não disponível!\n\nPara usar AR:\n1. Use Chrome ou Edge\n2. Use um dispositivo móvel Android/iOS\n3. Permita acesso à câmera\n\nEm computadores, use o visualizador 3D normal.");
+    }
+    
     throw error;
   }
 }
@@ -124,12 +173,19 @@ function stopARScene() {
   }
 
   try {
-    if (mindarThree) {
-      mindarThree.stop();
-      arRenderer.setAnimationLoop(null);
+    if (xrSession) {
+      xrSession.end();
+      xrSession = null;
     }
 
+    if (hitTestSource) {
+      hitTestSource.cancel();
+      hitTestSource = null;
+    }
+
+    arRenderer.setAnimationLoop(null);
     isARRunning = false;
+    isPlaced = false;
     updateARStatus("AR Parado", "lost");
 
     // Limpar container

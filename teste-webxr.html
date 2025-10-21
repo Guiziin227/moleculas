@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste WebXR AR</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .test-box {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 5px solid #888;
+        }
+        .success {
+            border-left-color: #4caf50;
+        }
+        .error {
+            border-left-color: #f44336;
+        }
+        .warning {
+            border-left-color: #ff9800;
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+            width: 100%;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+        .status {
+            font-weight: bold;
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        h1 {
+            text-align: center;
+            color: #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔬 Teste de Compatibilidade WebXR AR</h1>
+    
+    <div class="test-box" id="browser">
+        <h3>🌐 Navegador</h3>
+        <p id="browserInfo">Verificando...</p>
+    </div>
+
+    <div class="test-box" id="webxr">
+        <h3>🥽 WebXR API</h3>
+        <p id="webxrInfo">Verificando...</p>
+    </div>
+
+    <div class="test-box" id="ar">
+        <h3>📱 Suporte AR</h3>
+        <p id="arInfo">Verificando...</p>
+    </div>
+
+    <div class="test-box" id="https">
+        <h3>🔒 HTTPS/Localhost</h3>
+        <p id="httpsInfo">Verificando...</p>
+    </div>
+
+    <div class="test-box" id="camera">
+        <h3>📷 Acesso à Câmera</h3>
+        <p id="cameraInfo">Clique no botão abaixo para testar</p>
+        <button onclick="testCamera()">Testar Câmera</button>
+    </div>
+
+    <div class="test-box" id="result">
+        <h3>📊 Resultado Final</h3>
+        <p class="status" id="finalResult">Executando testes...</p>
+    </div>
+
+    <script>
+        let tests = {
+            browser: false,
+            webxr: false,
+            ar: false,
+            https: false,
+            camera: false
+        };
+
+        // Detectar navegador
+        function detectBrowser() {
+            const userAgent = navigator.userAgent;
+            let browserName = "Desconhecido";
+            
+            if (userAgent.indexOf("Chrome") > -1) browserName = "Chrome";
+            else if (userAgent.indexOf("Safari") > -1) browserName = "Safari";
+            else if (userAgent.indexOf("Firefox") > -1) browserName = "Firefox";
+            else if (userAgent.indexOf("Edge") > -1) browserName = "Edge";
+            
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const platform = isMobile ? "Móvel" : "Desktop";
+            
+            document.getElementById('browserInfo').innerHTML = 
+                `<strong>${browserName}</strong> em <strong>${platform}</strong><br>` +
+                `User Agent: <small>${userAgent}</small>`;
+            
+            if (isMobile && (browserName === "Chrome" || browserName === "Safari" || browserName === "Edge")) {
+                tests.browser = true;
+                document.getElementById('browser').classList.add('success');
+            } else {
+                document.getElementById('browser').classList.add('warning');
+                document.getElementById('browserInfo').innerHTML += 
+                    `<br><br>⚠️ Para AR, use Chrome/Edge/Safari em dispositivo móvel`;
+            }
+        }
+
+        // Verificar WebXR
+        async function checkWebXR() {
+            if ('xr' in navigator) {
+                tests.webxr = true;
+                document.getElementById('webxr').classList.add('success');
+                document.getElementById('webxrInfo').innerHTML = 
+                    '✅ <strong>WebXR API está disponível!</strong>';
+            } else {
+                document.getElementById('webxr').classList.add('error');
+                document.getElementById('webxrInfo').innerHTML = 
+                    '❌ <strong>WebXR API não encontrada</strong><br>' +
+                    'Seu navegador não suporta WebXR. Use Chrome ou Edge atualizado.';
+            }
+        }
+
+        // Verificar suporte AR
+        async function checkAR() {
+            if ('xr' in navigator) {
+                try {
+                    const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                    if (supported) {
+                        tests.ar = true;
+                        document.getElementById('ar').classList.add('success');
+                        document.getElementById('arInfo').innerHTML = 
+                            '✅ <strong>AR é suportado neste dispositivo!</strong><br>' +
+                            'Seu dispositivo tem os sensores necessários para AR.';
+                    } else {
+                        document.getElementById('ar').classList.add('error');
+                        document.getElementById('arInfo').innerHTML = 
+                            '❌ <strong>AR não é suportado</strong><br>' +
+                            'Seu dispositivo não tem os sensores necessários (ARCore/ARKit).<br>' +
+                            'Use um smartphone Android 8+ ou iOS 12+ com suporte AR.';
+                    }
+                } catch (error) {
+                    document.getElementById('ar').classList.add('error');
+                    document.getElementById('arInfo').innerHTML = 
+                        '❌ <strong>Erro ao verificar AR:</strong> ' + error.message;
+                }
+            } else {
+                document.getElementById('ar').classList.add('error');
+                document.getElementById('arInfo').innerHTML = 
+                    '❌ WebXR não disponível para teste';
+            }
+        }
+
+        // Verificar HTTPS
+        function checkHTTPS() {
+            const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            
+            if (isSecure) {
+                tests.https = true;
+                document.getElementById('https').classList.add('success');
+                document.getElementById('httpsInfo').innerHTML = 
+                    '✅ <strong>Conexão segura!</strong><br>' +
+                    `Protocolo: <strong>${location.protocol}</strong>`;
+            } else {
+                document.getElementById('https').classList.add('error');
+                document.getElementById('httpsInfo').innerHTML = 
+                    '❌ <strong>Conexão não segura</strong><br>' +
+                    `Protocolo: <strong>${location.protocol}</strong><br>` +
+                    'WebXR requer HTTPS ou localhost para funcionar.';
+            }
+        }
+
+        // Testar câmera
+        async function testCamera() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Testando...';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                
+                // Parar stream imediatamente
+                stream.getTracks().forEach(track => track.stop());
+                
+                tests.camera = true;
+                document.getElementById('camera').classList.add('success');
+                document.getElementById('cameraInfo').innerHTML = 
+                    '✅ <strong>Câmera acessível!</strong><br>' +
+                    'Permissão concedida com sucesso.';
+                btn.textContent = 'Câmera OK ✓';
+                btn.style.background = '#4caf50';
+                
+            } catch (error) {
+                document.getElementById('camera').classList.add('error');
+                document.getElementById('cameraInfo').innerHTML = 
+                    '❌ <strong>Erro ao acessar câmera:</strong><br>' +
+                    error.message + '<br><br>' +
+                    '<strong>Soluções:</strong><br>' +
+                    '1. Permita acesso à câmera nas configurações do navegador<br>' +
+                    '2. Verifique se nenhum outro app está usando a câmera<br>' +
+                    '3. Recarregue a página e tente novamente';
+                btn.textContent = 'Tentar Novamente';
+                btn.disabled = false;
+            }
+            
+            updateFinalResult();
+        }
+
+        // Atualizar resultado final
+        function updateFinalResult() {
+            const allPassed = tests.browser && tests.webxr && tests.ar && tests.https;
+            const resultBox = document.getElementById('result');
+            const resultText = document.getElementById('finalResult');
+            
+            if (allPassed && tests.camera) {
+                resultBox.classList.add('success');
+                resultText.innerHTML = 
+                    '✅ <strong>TUDO OK!</strong><br>' +
+                    'Seu dispositivo está pronto para usar AR!';
+            } else if (allPassed) {
+                resultBox.classList.add('warning');
+                resultText.innerHTML = 
+                    '⚠️ <strong>Quase pronto!</strong><br>' +
+                    'Tudo OK, mas você precisa permitir acesso à câmera.';
+            } else {
+                resultBox.classList.add('error');
+                const issues = [];
+                if (!tests.browser) issues.push('Use Chrome/Edge/Safari em dispositivo móvel');
+                if (!tests.webxr) issues.push('WebXR não disponível');
+                if (!tests.ar) issues.push('Dispositivo sem suporte AR');
+                if (!tests.https) issues.push('Use HTTPS ou localhost');
+                
+                resultText.innerHTML = 
+                    '❌ <strong>AR não funcionará</strong><br><br>' +
+                    '<strong>Problemas encontrados:</strong><br>' +
+                    issues.map(i => '• ' + i).join('<br>');
+            }
+        }
+
+        // Executar testes
+        async function runTests() {
+            detectBrowser();
+            await checkWebXR();
+            await checkAR();
+            checkHTTPS();
+            updateFinalResult();
+        }
+
+        // Iniciar quando página carregar
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>
